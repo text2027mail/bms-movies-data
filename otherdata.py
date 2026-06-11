@@ -1,3 +1,6 @@
+send full python code replacement...
+
+
 import os
 import json
 from datetime import datetime
@@ -23,7 +26,9 @@ editors = {}
 cinematography = {}
 
 movierelease = {}
-
+actorfilmography = {}
+directorfilmography = {}
+moviemeta = {}
 
 def add_person(store, person):
 
@@ -68,6 +73,30 @@ def add_person(store, person):
 
         store[key][1] = image
 
+def add_filmography(
+    store,
+    person_name,
+    event_code
+):
+
+    if (
+        not person_name
+        or not event_code
+    ):
+        return
+
+    key = (
+        person_name
+        .strip()
+        .lower()
+    )
+
+    store.setdefault(
+        key,
+        set()
+    ).add(
+        event_code
+    )
 
 def process_movie(movie):
 
@@ -75,6 +104,15 @@ def process_movie(movie):
     rd = movie.get("rd")
     title = movie.get("t")
 
+
+    if ec:
+        moviemeta[ec] = [
+            title or "",
+            rd or "",
+            movie.get("img") or ""
+        ]
+    
+    
     if ec and rd:
 
         try:
@@ -97,7 +135,7 @@ def process_movie(movie):
 
         except Exception:
             pass
-
+        
     for actor in movie.get(
         "cast",
         []
@@ -107,6 +145,21 @@ def process_movie(movie):
             actors,
             actor
         )
+
+        if (
+            actor
+            and len(actor)
+            and actor[0]
+        ):
+
+            add_filmography(
+                actorfilmography,
+                actor[0],
+                ec
+            )        
+        
+        
+        
 
     crew = movie.get(
         "crew",
@@ -121,6 +174,19 @@ def process_movie(movie):
             directors,
             item
         )
+
+        if (
+            item
+            and len(item)
+            and item[0]
+        ):
+
+            add_filmography(
+                directorfilmography,
+                item[0],
+                ec
+            )
+
 
     for item in crew.get(
         "p",
@@ -368,6 +434,29 @@ save_json(
 save_json(
     "movierelease.json",
     movierelease
+)
+
+save_json(
+    "actorfilmography.json",
+    {
+        k: sorted(v)
+        for k, v
+        in actorfilmography.items()
+    }
+)
+
+save_json(
+    "directorfilmography.json",
+    {
+        k: sorted(v)
+        for k, v
+        in directorfilmography.items()
+    }
+)
+
+save_json(
+    "moviemeta.json",
+    moviemeta
 )
 
 print("\nDone")

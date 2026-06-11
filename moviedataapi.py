@@ -280,11 +280,22 @@ async def main():
                 f"\\nPASS {pass_no} "
                 f"({len(failed_codes)} codes)"
             )
-
+            
             failed_codes = await run_pass(
                 session,
                 failed_codes
             )
+
+            with open(
+                "logs/failed.txt",
+                "w",
+                encoding="utf-8"
+            ) as f:
+                f.write(
+                    "\n".join(
+                        sorted(failed_codes)
+                    )
+                )
 
             print(
                 f"Remaining after pass {pass_no}: "

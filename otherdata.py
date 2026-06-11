@@ -1,24 +1,19 @@
 import os
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 DATA_DIR = "data"
 OUTPUT_DIR = "otherdata"
-
-CURRENT_YEAR = datetime.now().year
 
 os.makedirs(
     OUTPUT_DIR,
     exist_ok=True
 )
 
-# Only current & future years
-ALLOWED_FILES = {
-    f"{CURRENT_YEAR}.json",
-    f"{CURRENT_YEAR + 1}.json",
-    f"{CURRENT_YEAR + 2}.json",
-    "unknown.json"
-}
+IST_YEAR = datetime.now(
+    ZoneInfo("Asia/Kolkata")
+).year
 
 actors = {}
 directors = {}
@@ -49,18 +44,28 @@ def add_person(store, person):
 
     image = ""
 
-    if len(person) > 1 and person[1]:
-        image = str(person[1]).strip()
+    if (
+        len(person) > 1
+        and person[1]
+    ):
+        image = str(
+            person[1]
+        ).strip()
 
     key = name.lower()
 
     if key not in store:
-        store[key] = [name, image]
+
+        store[key] = [
+            name,
+            image
+        ]
 
     elif (
         not store[key][1]
         and image
     ):
+
         store[key][1] = image
 
 
@@ -70,16 +75,43 @@ def process_movie(movie):
     rd = movie.get("rd")
     title = movie.get("t")
 
-    if ec:
-        movierelease[ec] = [
-            rd or "",
-            title or ""
-        ]
+    # --------------------------------------------------
+    # Movie Release Data
+    # Current IST year + future years only
+    # --------------------------------------------------
+
+    if ec and rd:
+
+        try:
+
+            release_year = int(
+                rd[:4]
+            )
+
+            if (
+                release_year
+                >= IST_YEAR
+            ):
+
+                movierelease[
+                    ec
+                ] = [
+                    rd,
+                    title or ""
+                ]
+
+        except Exception:
+            pass
+
+    # --------------------------------------------------
+    # Cast
+    # --------------------------------------------------
 
     for actor in movie.get(
         "cast",
         []
     ):
+
         add_person(
             actors,
             actor
@@ -90,46 +122,61 @@ def process_movie(movie):
         {}
     )
 
+    # Directors
+
     for item in crew.get(
         "d",
         []
     ):
+
         add_person(
             directors,
             item
         )
 
+    # Producers
+
     for item in crew.get(
         "p",
         []
     ):
+
         add_person(
             producers,
             item
         )
 
+    # Music
+
     for item in crew.get(
         "m",
         []
     ):
+
         add_person(
             music,
             item
         )
 
+    # Editors
+
     for item in crew.get(
         "e",
         []
     ):
+
         add_person(
             editors,
             item
         )
 
+    # Cinematography
+
     for item in crew.get(
         "c",
         []
     ):
+
         add_person(
             cinematography,
             item
@@ -172,7 +219,7 @@ def process_file(filepath):
 
 
 print(
-    "\nScanning files..."
+    "\nScanning all data files..."
 )
 
 movie_count = 0
@@ -181,7 +228,9 @@ for filename in sorted(
     os.listdir(DATA_DIR)
 ):
 
-    if filename not in ALLOWED_FILES:
+    if not filename.endswith(
+        ".json"
+    ):
         continue
 
     filepath = os.path.join(
@@ -227,8 +276,7 @@ def save_json(
         )
 
     print(
-        f"Saved {filename} "
-        f"({len(data)} entries)"
+        f"Saved {filename}"
     )
 
 
@@ -236,7 +284,8 @@ save_json(
     "actors.json",
     sorted(
         actors.values(),
-        key=lambda x: x[0]
+        key=lambda x:
+        x[0].lower()
     )
 )
 
@@ -244,7 +293,8 @@ save_json(
     "directors.json",
     sorted(
         directors.values(),
-        key=lambda x: x[0]
+        key=lambda x:
+        x[0].lower()
     )
 )
 
@@ -252,7 +302,8 @@ save_json(
     "producers.json",
     sorted(
         producers.values(),
-        key=lambda x: x[0]
+        key=lambda x:
+        x[0].lower()
     )
 )
 
@@ -260,7 +311,8 @@ save_json(
     "music.json",
     sorted(
         music.values(),
-        key=lambda x: x[0]
+        key=lambda x:
+        x[0].lower()
     )
 )
 
@@ -268,7 +320,8 @@ save_json(
     "editors.json",
     sorted(
         editors.values(),
-        key=lambda x: x[0]
+        key=lambda x:
+        x[0].lower()
     )
 )
 
@@ -276,7 +329,8 @@ save_json(
     "cinematography.json",
     sorted(
         cinematography.values(),
-        key=lambda x: x[0]
+        key=lambda x:
+        x[0].lower()
     )
 )
 
@@ -299,6 +353,10 @@ print(
     f"{len(directors)}"
 )
 print(
+    f"Producers: "
+    f"{len(producers)}"
+)
+print(
     f"Music: "
     f"{len(music)}"
 )
@@ -307,14 +365,10 @@ print(
     f"{len(editors)}"
 )
 print(
-    f"Producers: "
-    f"{len(producers)}"
-)
-print(
     f"Cinematography: "
     f"{len(cinematography)}"
 )
 print(
-    f"Movie Releases: "
+    f"Upcoming Releases: "
     f"{len(movierelease)}"
 )

@@ -1,7 +1,6 @@
 name: Build Other Data
 
 on:
-
   workflow_dispatch:
 
   workflow_run:
@@ -18,7 +17,6 @@ permissions:
   contents: write
 
 jobs:
-
   build:
 
     if: >
@@ -31,45 +29,61 @@ jobs:
 
     steps:
 
-      - name: Checkout Repository
+      - name: Checkout Latest Repository State
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Pull Latest Changes
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Create Output Directory
+      - name: Create Directories
         run: |
+          mkdir -p data
           mkdir -p otherdata
 
       - name: Verify Data Exists
         run: |
-          if [ ! -d "data" ]; then
-            echo "data directory missing"
-            exit 1
-          fi
+          echo "Data files:"
+          ls -lh data || true
 
-      - name: Build Other Data
+      - name: Run Other Data Builder
         run: |
           python otherdata.py
 
-      - name: Show Generated Files
+      - name: Show Output
         run: |
-          echo "Generated files:"
+          echo "Generated:"
           ls -lh otherdata/
 
-      - name: Commit Changes
+      - name: Check For Changes
+        id: changes
+        run: |
+          git add otherdata/
+
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit
+        if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add otherdata/
-
-          git diff --cached --quiet && exit 0
-
           git commit -m "update otherdata"
 
-      - name: Push Changes
+      - name: Push
+        if: steps.changes.outputs.changed == 'true'
         run: |
-          git push
+          git push origin main

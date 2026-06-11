@@ -75,11 +75,6 @@ def process_movie(movie):
     rd = movie.get("rd")
     title = movie.get("t")
 
-    # --------------------------------------------------
-    # Movie Release Data
-    # Current IST year + future years only
-    # --------------------------------------------------
-
     if ec and rd:
 
         try:
@@ -103,10 +98,6 @@ def process_movie(movie):
         except Exception:
             pass
 
-    # --------------------------------------------------
-    # Cast
-    # --------------------------------------------------
-
     for actor in movie.get(
         "cast",
         []
@@ -122,61 +113,46 @@ def process_movie(movie):
         {}
     )
 
-    # Directors
-
     for item in crew.get(
         "d",
         []
     ):
-
         add_person(
             directors,
             item
         )
 
-    # Producers
-
     for item in crew.get(
         "p",
         []
     ):
-
         add_person(
             producers,
             item
         )
 
-    # Music
-
     for item in crew.get(
         "m",
         []
     ):
-
         add_person(
             music,
             item
         )
 
-    # Editors
-
     for item in crew.get(
         "e",
         []
     ):
-
         add_person(
             editors,
             item
         )
 
-    # Cinematography
-
     for item in crew.get(
         "c",
         []
     ):
-
         add_person(
             cinematography,
             item
@@ -185,15 +161,48 @@ def process_movie(movie):
 
 def process_file(filepath):
 
-    count = 0
+    try:
 
-    with open(
-        filepath,
-        "r",
-        encoding="utf-8"
-    ) as f:
+        with open(
+            filepath,
+            "r",
+            encoding="utf-8"
+        ) as f:
 
-        for line in f:
+            content = f.read().strip()
+
+        if not content:
+            return 0
+
+        # JSON Array
+        if content.startswith("["):
+
+            movies = json.loads(
+                content
+            )
+
+            count = 0
+
+            for movie in movies:
+
+                if isinstance(
+                    movie,
+                    dict
+                ):
+
+                    process_movie(
+                        movie
+                    )
+
+                    count += 1
+
+            return count
+
+        # NDJSON fallback
+
+        count = 0
+
+        for line in content.splitlines():
 
             line = line.strip()
 
@@ -215,7 +224,15 @@ def process_file(filepath):
             except Exception:
                 pass
 
-    return count
+        return count
+
+    except Exception as e:
+
+        print(
+            f"ERROR {filepath}: {e}"
+        )
+
+        return 0
 
 
 print(
@@ -244,12 +261,19 @@ for filename in sorted(
         continue
 
     print(
-        f"Processing {filename}"
+        f"\nProcessing {filename}"
     )
 
-    movie_count += process_file(
+    count = process_file(
         filepath
     )
+
+    print(
+        f"{filename}: "
+        f"{count} movies"
+    )
+
+    movie_count += count
 
 
 def save_json(
@@ -275,8 +299,15 @@ def save_json(
             separators=(",", ":")
         )
 
+    size = round(
+        os.path.getsize(path)
+        / 1024,
+        2
+    )
+
     print(
-        f"Saved {filename}"
+        f"Saved {filename} "
+        f"({size} KB)"
     )
 
 

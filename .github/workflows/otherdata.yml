@@ -1,0 +1,75 @@
+name: Build Other Data
+
+on:
+
+  workflow_dispatch:
+
+  workflow_run:
+    workflows:
+      - Movie Data API
+    types:
+      - completed
+
+concurrency:
+  group: otherdata
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+
+  build:
+
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create Output Directory
+        run: |
+          mkdir -p otherdata
+
+      - name: Verify Data Exists
+        run: |
+          if [ ! -d "data" ]; then
+            echo "data directory missing"
+            exit 1
+          fi
+
+      - name: Build Other Data
+        run: |
+          python otherdata.py
+
+      - name: Show Generated Files
+        run: |
+          echo "Generated files:"
+          ls -lh otherdata/
+
+      - name: Commit Changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add otherdata/
+
+          git diff --cached --quiet && exit 0
+
+          git commit -m "update otherdata"
+
+      - name: Push Changes
+        run: |
+          git push

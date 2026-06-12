@@ -234,6 +234,21 @@ async def main():
 
         all_codes = movies_codes | moviesdb_codes
 
+        manual_codes = set()
+
+        if os.path.exists("logs/manual.txt"):
+            with open(
+                "logs/manual.txt",
+                encoding="utf-8"
+            ) as f:
+                manual_codes = {
+                    x.strip()
+                    for x in f
+                    if x.strip()
+                }
+
+        all_codes |= manual_codes
+
     already = set()
 
     if os.path.exists("logs/alreadyfetched.txt"):

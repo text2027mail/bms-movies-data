@@ -6,10 +6,55 @@ from datetime import datetime
 DATA_DIR = "data"
 
 movies_by_ec = {}
+movies_without_ec = []
 
 files_read = 0
 movies_read = 0
 duplicates_removed = 0
+
+
+def add_movie(movie):
+    global movies_read
+    global duplicates_removed
+
+    if not isinstance(movie, dict):
+        return
+
+    movies_read += 1
+
+    ec = str(
+        movie.get("ec", "")
+    ).strip()
+
+    if not ec:
+        movies_without_ec.append(movie)
+        return
+
+    existing = movies_by_ec.get(ec)
+
+    if existing is None:
+        movies_by_ec[ec] = movie
+        return
+
+    old_size = len(
+        json.dumps(
+            existing,
+            ensure_ascii=False
+        )
+    )
+
+    new_size = len(
+        json.dumps(
+            movie,
+            ensure_ascii=False
+        )
+    )
+
+    if new_size > old_size:
+        movies_by_ec[ec] = movie
+
+    duplicates_removed += 1
+
 
 print("Reading files...")
 
@@ -25,63 +70,86 @@ for filename in os.listdir(DATA_DIR):
 
     files_read += 1
 
-    with open(
-        filepath,
-        "r",
-        encoding="utf-8"
-    ) as f:
+    try:
 
-        for line in f:
+        with open(
+            filepath,
+            "r",
+            encoding="utf-8"
+        ) as f:
 
-            line = line.strip()
+            content = f.read().strip()
 
-            if not line:
+        if not content:
+            continue
+
+        # Full JSON file
+        try:
+
+            parsed = json.loads(content)
+
+            if isinstance(parsed, list):
+
+                for movie in parsed:
+                    add_movie(movie)
+
                 continue
 
-            try:
-                movie = json.loads(line)
-            except Exception:
+            if isinstance(parsed, dict):
+
+                add_movie(parsed)
                 continue
 
-            movies_read += 1
+        except Exception:
+            pass
 
-            ec = str(
-                movie.get("ec", "")
-            ).strip()
+        # JSONL fallback
+        with open(
+            filepath,
+            "r",
+            encoding="utf-8"
+        ) as f:
 
-            if not ec:
-                continue
+            for line in f:
 
-            existing = movies_by_ec.get(ec)
+                line = line.strip()
 
-            if existing is None:
-                movies_by_ec[ec] = movie
-                continue
+                if not line:
+                    continue
 
-            old_size = len(
-                json.dumps(
-                    existing,
-                    ensure_ascii=False
-                )
-            )
+                try:
+                    movie = json.loads(line)
+                except Exception:
+                    continue
 
-            new_size = len(
-                json.dumps(
-                    movie,
-                    ensure_ascii=False
-                )
-            )
+                if isinstance(movie, list):
 
-            if new_size > old_size:
-                movies_by_ec[ec] = movie
+                    for item in movie:
+                        add_movie(item)
 
-            duplicates_removed += 1
+                else:
+                    add_movie(movie)
 
-print("Grouping by release year...")
+    except Exception as e:
+
+        print(
+            f"Failed reading {filename}: {e}"
+        )
+
+print(
+    f"Loaded {movies_read} movies"
+)
 
 year_data = defaultdict(list)
 
-for movie in movies_by_ec.values():
+all_movies = (
+    list(movies_by_ec.values())
+    + movies_without_ec
+)
+
+print("Grouping by year...")
+
+for movie in all_movies:
 
     rd = movie.get("rd")
 
@@ -90,33 +158,37 @@ for movie in movies_by_ec.values():
     if isinstance(rd, str):
 
         try:
+
             year = str(
                 datetime.strptime(
                     rd,
                     "%Y-%m-%d"
                 ).year
             )
+
         except Exception:
             pass
 
     year_data[year].append(movie)
 
-print("Sorting movies...")
+print("Sorting...")
 
 for movies in year_data.values():
 
+    def sort_key(movie):
+
+        rd = movie.get("rd")
+
+        if not isinstance(rd, str):
+            return "9999-99-99"
+
+        return rd
+
     movies.sort(
-        key=lambda x: (
-            x.get("rd")
-            if isinstance(
-                x.get("rd"),
-                str
-            )
-            else "9999-99-99"
-        )
+        key=sort_key
     )
 
-print("Removing old json files...")
+print("Removing old files...")
 
 for filename in os.listdir(DATA_DIR):
 
@@ -129,7 +201,7 @@ for filename in os.listdir(DATA_DIR):
             )
         )
 
-print("Writing new files...")
+print("Writing cleaned files...")
 
 for year in sorted(year_data.keys()):
 
@@ -158,7 +230,8 @@ for year in sorted(year_data.keys()):
 print("\n" + "=" * 60)
 print("Files Read         :", files_read)
 print("Movies Read        :", movies_read)
-print("Unique Movies      :", len(movies_by_ec))
+print("Unique EC Movies   :", len(movies_by_ec))
+print("No EC Movies       :", len(movies_without_ec))
 print("Duplicates Removed :", duplicates_removed)
 print("=" * 60)
 
@@ -166,7 +239,7 @@ for year in sorted(year_data):
 
     print(
         f"{year}.json -> "
-        f"{len(year_data[year])} movies"
+        f"{len(year_data[year])}"
     )
 
 print("\nFinished.")

@@ -258,7 +258,7 @@ for year in sorted(year_data.keys()):
                     movie,
                     ensure_ascii=False,
                     separators=(",", ":")
-                ) + "\\n"
+                ) + "\n"
             )
 
 print("Writing metadata...")

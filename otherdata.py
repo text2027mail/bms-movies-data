@@ -1,4 +1,3 @@
-
 import os
 import json
 from datetime import datetime
@@ -224,33 +223,35 @@ def process_file(filepath):
         if not content:
             return 0
 
-        # JSON Array
-        if content.startswith("["):
-
-            movies = json.loads(
-                content
-            )
-
-            count = 0
-
-            for movie in movies:
-
-                if isinstance(
-                    movie,
-                    dict
-                ):
-
-                    process_movie(
-                        movie
-                    )
-
-                    count += 1
-
-            return count
-
-        # NDJSON fallback
-
         count = 0
+
+        # Try JSON array first
+
+        try:
+
+            data = json.loads(content)
+
+            if isinstance(data, list):
+
+                for movie in data:
+
+                    if isinstance(
+                        movie,
+                        dict
+                    ):
+
+                        process_movie(
+                            movie
+                        )
+
+                        count += 1
+
+                return count
+
+        except Exception:
+            pass
+
+        # NDJSON
 
         for line in content.splitlines():
 
@@ -265,11 +266,16 @@ def process_file(filepath):
                     line
                 )
 
-                process_movie(
-                    movie
-                )
+                if isinstance(
+                    movie,
+                    dict
+                ):
 
-                count += 1
+                    process_movie(
+                        movie
+                    )
+
+                    count += 1
 
             except Exception:
                 pass

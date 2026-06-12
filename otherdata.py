@@ -1,3 +1,4 @@
+
 import os
 import json
 from datetime import datetime
@@ -112,26 +113,12 @@ def process_movie(movie):
     
     if ec and rd:
 
-        try:
-
-            release_year = int(
-                rd[:4]
-            )
-
-            if (
-                release_year
-                >= IST_YEAR
-            ):
-
-                movierelease[
-                    ec
-                ] = [
-                    rd,
-                    title or ""
-                ]
-
-        except Exception:
-            pass
+        movierelease[
+            ec
+        ] = [
+            rd,
+            title or ""
+        ]
         
     for actor in movie.get(
         "cast",
@@ -489,3 +476,4 @@ print(
     f"Upcoming Releases: "
     f"{len(movierelease)}"
 )
+

@@ -122,7 +122,7 @@ def simplify_movie(data):
 async def save_success(event_code):
     async with SUCCESS_LOCK:
         with open("logs/alreadyfetched.txt", "a", encoding="utf-8") as f:
-            f.write(event_code + "\\n")
+            f.write(event_code + "\n")
 
 
 async def save_movie(movie):
@@ -140,7 +140,7 @@ async def save_movie(movie):
                     movie,
                     ensure_ascii=False,
                     separators=(",", ":")
-                ) + "\\n"
+                ) + "\n"
             )
 
 
@@ -234,6 +234,21 @@ async def main():
 
         all_codes = movies_codes | moviesdb_codes
 
+        manual_codes = set()
+
+        if os.path.exists("logs/manual.txt"):
+            with open(
+                "logs/manual.txt",
+                encoding="utf-8"
+            ) as f:
+                manual_codes = {
+                    x.strip()
+                    for x in f
+                    if x.strip()
+                }
+
+        all_codes |= manual_codes
+
     already = set()
 
     if os.path.exists("logs/alreadyfetched.txt"):
@@ -307,7 +322,7 @@ async def main():
         "w",
         encoding="utf-8"
     ) as f:
-        f.write("\\n".join(failed_codes))
+        f.write("\n".join(failed_codes))
 
     print("\\nFinished")
     print("Added :", added)

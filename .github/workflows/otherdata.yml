@@ -48,12 +48,11 @@ jobs:
       - name: Create Directories
         run: |
           mkdir -p data
-          mkdir -p otherdata
 
-      - name: Verify Data Exists
+      - name: Recreate Otherdata
         run: |
-          echo "Data files:"
-          ls -lh data || true
+          rm -rf otherdata
+          mkdir -p otherdata
 
       - name: Run Other Data Builder
         run: |
@@ -61,29 +60,16 @@ jobs:
 
       - name: Show Output
         run: |
-          echo "Generated:"
-          ls -lh otherdata/
+          echo "Generated files:"
+          ls -lah otherdata/
 
-      - name: Check For Changes
-        id: changes
-        run: |
-          git add otherdata/
-
-          if git diff --cached --quiet; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Commit
-        if: steps.changes.outputs.changed == 'true'
+      - name: Commit And Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git commit -m "update otherdata"
+          git add otherdata/
 
-      - name: Push
-        if: steps.changes.outputs.changed == 'true'
-        run: |
+          git commit -m "update otherdata" || echo "No changes"
+
           git push origin main

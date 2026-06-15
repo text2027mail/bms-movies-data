@@ -1,333 +1,484 @@
-import asyncio
-import aiohttp
-import json
 import os
-import random
+import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
-FIRST_SOURCE = (
-    "https://cdn.jsdelivr.net/gh/unknownman2024/bms-movies@main/output/movies.json"
+DATA_DIR = "data"
+OUTPUT_DIR = "otherdata"
+
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
 )
 
-SECOND_SOURCE = (
-    "https://cdn.jsdelivr.net/gh/unknownman2024/bms-interest-track@main/Bookmyshow%20Data/moviesdb.json"
-)
+IST_YEAR = datetime.now(
+    ZoneInfo("Asia/Kolkata")
+).year
 
-CONCURRENCY = 50
-REQUEST_TIMEOUT = 30
-MAX_PASSES = 3
+actors = {}
+directors = {}
+producers = {}
+music = {}
+editors = {}
+cinematography = {}
 
-USER_AGENTS = [
-    "Mozilla/5.2 (Windows NT 10.0; Win64; x64)",
-    "Mozilla/5.2 (Macintosh; Intel Mac OS X 10_15_7)",
-    "Mozilla/5.2 (X11; Linux x86_64)",
-    "Mozilla/5.2 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0",
-    "Mozilla/5.2 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/137.0.0.0 Safari/537.36"
-]
+movierelease = {}
+actorfilmography = {}
+directorfilmography = {}
+moviemeta = {}
 
-SEM = asyncio.Semaphore(CONCURRENCY)
-SUCCESS_LOCK = asyncio.Lock()
-FILE_LOCKS = {}
+def add_person(store, person):
 
-completed = 0
-added = 0
+    if (
+        not isinstance(person, list)
+        or len(person) < 1
+    ):
+        return
 
+    name = (
+        str(person[0]).strip()
+        if person[0]
+        else ""
+    )
 
-def get_file_lock(year):
-    if year not in FILE_LOCKS:
-        FILE_LOCKS[year] = asyncio.Lock()
-    return FILE_LOCKS[year]
+    if not name:
+        return
 
+    image = ""
 
-async def fetch_json(session, url):
-    try:
-        async with session.get(url, timeout=60) as resp:
-            if resp.status != 200:
-                return None
-            return await resp.json()
-    except Exception:
-        return None
+    if (
+        len(person) > 1
+        and person[1]
+    ):
+        image = str(
+            person[1]
+        ).strip()
 
+    key = name.lower()
 
-async def get_codes_from_movies_json(session):
-    data = await fetch_json(session, FIRST_SOURCE)
+    if key not in store:
 
-    if not isinstance(data, list):
-        return set()
+        store[key] = [
+            name,
+            image
+        ]
 
-    return {
-        str(movie.get("DefaultEventCode")).strip()
-        for movie in data
-        if movie.get("DefaultEventCode")
-    }
+    elif (
+        not store[key][1]
+        and image
+    ):
 
+        store[key][1] = image
 
-async def get_codes_from_moviesdb(session):
-    data = await fetch_json(session, SECOND_SOURCE)
+def add_filmography(
+    store,
+    person_name,
+    event_code
+):
 
-    if not isinstance(data, dict):
-        return set()
+    if (
+        not person_name
+        or not event_code
+    ):
+        return
 
-    return {
-        str(code).strip()
-        for code in data.keys()
-        if code
-    }
+    key = (
+        person_name
+        .strip()
+        .lower()
+    )
 
+    store.setdefault(
+        key,
+        set()
+    ).add(
+        event_code
+    )
 
-def simplify_people(items):
-    return [
-        [p.get("name"), p.get("image")]
-        for p in items
-        if p.get("name")
-    ]
+def process_movie(movie):
 
-
-def simplify_movie(data):
-    crew = data.get("crew", {})
-
-    rd = None
-    try:
-        rd = datetime.strptime(
-            data.get("releaseDate"),
-            "%d %b, %Y"
-        ).strftime("%Y-%m-%d")
-    except Exception:
-        pass
-
-    return {
-        "ec": data.get("eventCode"),
-        "t": data.get("title"),
-        "img": data.get("poster"),
-        "og": data.get("ogImage"),
-        "d": data.get("description"),
-        "rd": rd,
-        "rt": data.get("runtimeMinutes"),
-        "ct": data.get("certificate"),
-        "g": data.get("genres", []),
-        "l": data.get("languages", []),
-        "f": data.get("formats", []),
-        "i": data.get("interestedCount"),
-        "cast": simplify_people(data.get("cast", [])),
-        "crew": {
-            "d": simplify_people(crew.get("directors", [])),
-            "p": simplify_people(crew.get("producers", [])),
-            "m": simplify_people(crew.get("music", [])),
-            "c": simplify_people(crew.get("cinematography", [])),
-            "e": simplify_people(crew.get("editors", []))
-        }
-    }
+    ec = movie.get("ec")
+    rd = movie.get("rd")
+    title = movie.get("t")
 
 
-async def save_success(event_code):
-    async with SUCCESS_LOCK:
-        with open("logs/alreadyfetched.txt", "a", encoding="utf-8") as f:
-            f.write(event_code + "\n")
+    if ec:
+        moviemeta[ec] = [
+            title or "",
+            rd or "",
+            movie.get("img") or ""
+        ]
+    
+    
+    if ec and rd:
 
+        movierelease[
+            ec
+        ] = [
+            rd,
+            title or ""
+        ]
+        
+    for actor in movie.get(
+        "cast",
+        []
+    ):
 
-async def save_movie(movie):
-    year = "unknown"
+        add_person(
+            actors,
+            actor
+        )
 
-    if movie.get("rd"):
-        year = movie["rd"][:4]
+        if (
+            actor
+            and len(actor)
+            and actor[0]
+        ):
 
-    filename = f"data/{year}.json"
+            add_filmography(
+                actorfilmography,
+                actor[0],
+                ec
+            )        
+        
+        
+        
 
-    async with get_file_lock(year):
-        with open(filename, "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    movie,
-                    ensure_ascii=False,
-                    separators=(",", ":")
-                ) + "\n"
+    crew = movie.get(
+        "crew",
+        {}
+    )
+
+    for item in crew.get(
+        "d",
+        []
+    ):
+        add_person(
+            directors,
+            item
+        )
+
+        if (
+            item
+            and len(item)
+            and item[0]
+        ):
+
+            add_filmography(
+                directorfilmography,
+                item[0],
+                ec
             )
 
 
-async def fetch_movie(session, event_code):
-    global completed, added
-
-    async with SEM:
-        headers = {
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept": "application/json",
-            "Referer": "https://in.bookmyshow.com/",
-            "Origin": "https://in.bookmyshow.com"
-        }
-
-        url = (
-            "https://bms-server-szkk.vercel.app/api/movie"
-            f"?eventCode={event_code}"
+    for item in crew.get(
+        "p",
+        []
+    ):
+        add_person(
+            producers,
+            item
         )
 
-        try:
-            async with session.get(
-                url,
-                headers=headers,
-                timeout=REQUEST_TIMEOUT
-            ) as r:
-
-                if r.status != 200:
-                    return False
-
-                data = await r.json()
-
-                if not data.get("success"):
-                    return False
-
-                movie = simplify_movie(data)
-
-                await save_movie(movie)
-                await save_success(event_code)
-
-                added += 1
-                return True
-
-        except Exception:
-            return False
-
-        finally:
-            completed += 1
-
-            if completed % 50 == 0:
-                print(
-                    f"[{completed}] Added={added}"
-                )
-
-
-async def run_pass(session, codes):
-    tasks = [
-        asyncio.create_task(
-            fetch_movie(session, code)
-        )
-        for code in codes
-    ]
-
-    results = await asyncio.gather(*tasks)
-
-    failed_codes = [
-        code
-        for code, ok in zip(codes, results)
-        if not ok
-    ]
-
-    return failed_codes
-
-
-async def main():
-
-    os.makedirs(
-        "data",
-        exist_ok=True
-    )
-
-    os.makedirs(
-        "logs",
-        exist_ok=True
-    )
-    async with aiohttp.ClientSession() as session:
-
-        movies_codes, moviesdb_codes = await asyncio.gather(
-            get_codes_from_movies_json(session),
-            get_codes_from_moviesdb(session)
+    for item in crew.get(
+        "m",
+        []
+    ):
+        add_person(
+            music,
+            item
         )
 
-        all_codes = movies_codes | moviesdb_codes
+    for item in crew.get(
+        "e",
+        []
+    ):
+        add_person(
+            editors,
+            item
+        )
 
-        manual_codes = set()
+    for item in crew.get(
+        "c",
+        []
+    ):
+        add_person(
+            cinematography,
+            item
+        )
 
-        if os.path.exists("logs/manual.txt"):
-            with open(
-                "logs/manual.txt",
-                encoding="utf-8"
-            ) as f:
-                manual_codes = {
-                    x.strip()
-                    for x in f
-                    if x.strip()
-                }
 
-        all_codes |= manual_codes
+def process_file(filepath):
 
-    already = set()
+    try:
 
-    if os.path.exists("logs/alreadyfetched.txt"):
         with open(
-            "logs/alreadyfetched.txt",
+            filepath,
+            "r",
             encoding="utf-8"
         ) as f:
-            already = {
-                x.strip()
-                for x in f
-                if x.strip()
-            }
 
-    remaining = sorted(all_codes - already)
+            content = f.read().strip()
 
-    print("=" * 60)
-    print("Total Codes     :", len(all_codes))
-    print("Already Fetched :", len(already))
-    print("Remaining       :", len(remaining))
-    print("=" * 60)
+        if not content:
+            return 0
 
-    connector = aiohttp.TCPConnector(
-        limit=CONCURRENCY,
-        ssl=False
-    )
+        count = 0
 
-    timeout = aiohttp.ClientTimeout(
-        total=REQUEST_TIMEOUT
-    )
+        # Try JSON array first
 
-    async with aiohttp.ClientSession(
-        connector=connector,
-        timeout=timeout
-    ) as session:
+        try:
 
-        failed_codes = remaining
+            data = json.loads(content)
 
-        for pass_no in range(1, MAX_PASSES + 1):
+            if isinstance(data, list):
 
-            if not failed_codes:
-                break
+                for movie in data:
 
-            print(
-                f"\\nPASS {pass_no} "
-                f"({len(failed_codes)} codes)"
-            )
-            
-            failed_codes = await run_pass(
-                session,
-                failed_codes
-            )
+                    if isinstance(
+                        movie,
+                        dict
+                    ):
 
-            with open(
-                "logs/failed.txt",
-                "w",
-                encoding="utf-8"
-            ) as f:
-                f.write(
-                    "\n".join(
-                        sorted(failed_codes)
-                    )
+                        process_movie(
+                            movie
+                        )
+
+                        count += 1
+
+                return count
+
+        except Exception:
+            pass
+
+        # NDJSON
+
+        for line in content.splitlines():
+
+            line = line.strip()
+
+            if not line:
+                continue
+
+            try:
+
+                movie = json.loads(
+                    line
                 )
 
-            print(
-                f"Remaining after pass {pass_no}: "
-                f"{len(failed_codes)}"
-            )
+                if isinstance(
+                    movie,
+                    dict
+                ):
+
+                    process_movie(
+                        movie
+                    )
+
+                    count += 1
+
+            except Exception:
+                pass
+
+        return count
+
+    except Exception as e:
+
+        print(
+            f"ERROR {filepath}: {e}"
+        )
+
+        return 0
+
+
+print(
+    "\nScanning all data files..."
+)
+
+movie_count = 0
+
+for filename in sorted(
+    os.listdir(DATA_DIR)
+):
+
+    if not filename.endswith(
+        ".json"
+    ):
+        continue
+
+    filepath = os.path.join(
+        DATA_DIR,
+        filename
+    )
+
+    if not os.path.isfile(
+        filepath
+    ):
+        continue
+
+    print(
+        f"\nProcessing {filename}"
+    )
+
+    count = process_file(
+        filepath
+    )
+
+    print(
+        f"{filename}: "
+        f"{count} movies"
+    )
+
+    movie_count += count
+
+
+def save_json(
+    filename,
+    data
+):
+
+    path = os.path.join(
+        OUTPUT_DIR,
+        filename
+    )
 
     with open(
-        "logs/failed.txt",
+        path,
         "w",
         encoding="utf-8"
     ) as f:
-        f.write("\n".join(failed_codes))
 
-    print("\\nFinished")
-    print("Added :", added)
-    print("Failed:", len(failed_codes))
+        json.dump(
+            data,
+            f,
+            ensure_ascii=False,
+            separators=(",", ":")
+        )
+
+    size = round(
+        os.path.getsize(path)
+        / 1024,
+        2
+    )
+
+    print(
+        f"Saved {filename} "
+        f"({size} KB)"
+    )
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+save_json(
+    "actors.json",
+    sorted(
+        actors.values(),
+        key=lambda x:
+        x[0].lower()
+    )
+)
+
+save_json(
+    "directors.json",
+    sorted(
+        directors.values(),
+        key=lambda x:
+        x[0].lower()
+    )
+)
+
+save_json(
+    "producers.json",
+    sorted(
+        producers.values(),
+        key=lambda x:
+        x[0].lower()
+    )
+)
+
+save_json(
+    "music.json",
+    sorted(
+        music.values(),
+        key=lambda x:
+        x[0].lower()
+    )
+)
+
+save_json(
+    "editors.json",
+    sorted(
+        editors.values(),
+        key=lambda x:
+        x[0].lower()
+    )
+)
+
+save_json(
+    "cinematography.json",
+    sorted(
+        cinematography.values(),
+        key=lambda x:
+        x[0].lower()
+    )
+)
+
+save_json(
+    "movierelease.json",
+    movierelease
+)
+
+save_json(
+    "actorfilmography.json",
+    {
+        k: sorted(v)
+        for k, v
+        in actorfilmography.items()
+    }
+)
+
+save_json(
+    "directorfilmography.json",
+    {
+        k: sorted(v)
+        for k, v
+        in directorfilmography.items()
+    }
+)
+
+save_json(
+    "moviemeta.json",
+    moviemeta
+)
+
+print("\nDone")
+print(
+    f"Movies Processed: "
+    f"{movie_count}"
+)
+print(
+    f"Actors: "
+    f"{len(actors)}"
+)
+print(
+    f"Directors: "
+    f"{len(directors)}"
+)
+print(
+    f"Producers: "
+    f"{len(producers)}"
+)
+print(
+    f"Music: "
+    f"{len(music)}"
+)
+print(
+    f"Editors: "
+    f"{len(editors)}"
+)
+print(
+    f"Cinematography: "
+    f"{len(cinematography)}"
+)
+print(
+    f"Upcoming Releases: "
+    f"{len(movierelease)}"
+)

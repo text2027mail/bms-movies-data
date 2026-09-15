@@ -1,4 +1,3 @@
-```yaml
 name: Unknown Movie Recovery
 
 on:
@@ -109,4 +108,3 @@ jobs:
       - name: Push Changes
         run: |
           git push
-```
